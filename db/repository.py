@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from db.models import HistoricalTransaction, Scenario, SystemConfig, UploadAuditLog
+from db.models import Budget, HistoricalTransaction, Scenario, SystemConfig, UploadAuditLog
 
 STARTING_BALANCE_KEY = "starting_balance_override"
 
@@ -86,6 +86,17 @@ def get_category_totals(session):
     return [(category, total) for category, total in rows]
 
 
+def get_category_totals_for_month(session, month_start):
+    """Category totals restricted to one calendar month (for budget-vs-actual)."""
+    month = func.date_trunc("month", HistoricalTransaction.transaction_date)
+    rows = session.execute(
+        select(HistoricalTransaction.category, func.sum(HistoricalTransaction.amount))
+        .where(month == month_start)
+        .group_by(HistoricalTransaction.category)
+    ).all()
+    return [(category, total) for category, total in rows]
+
+
 def get_all_transactions(session):
     return session.execute(
         select(HistoricalTransaction).order_by(HistoricalTransaction.transaction_date)
@@ -153,6 +164,27 @@ def get_all_scenarios(session):
 
 def delete_scenario(session, scenario_id) -> None:
     row = session.get(Scenario, scenario_id)
+    if row is not None:
+        session.delete(row)
+        session.commit()
+
+
+def save_budget(session, category: str, monthly_budget: Decimal) -> None:
+    stmt = pg_insert(Budget).values(category=category, monthly_budget=monthly_budget)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["category"],
+        set_={"monthly_budget": stmt.excluded.monthly_budget},
+    )
+    session.execute(stmt)
+    session.commit()
+
+
+def get_all_budgets(session):
+    return session.execute(select(Budget).order_by(Budget.category)).scalars().all()
+
+
+def delete_budget(session, budget_id) -> None:
+    row = session.get(Budget, budget_id)
     if row is not None:
         session.delete(row)
         session.commit()

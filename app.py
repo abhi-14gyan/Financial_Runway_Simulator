@@ -1,3 +1,4 @@
+import os
 from datetime import date
 from decimal import Decimal
 
@@ -22,11 +23,14 @@ from db.database import SessionLocal
 from db.repository import (
     STARTING_BALANCE_KEY,
     clear_config_value,
+    delete_budget,
     delete_scenario,
+    get_all_budgets,
     get_all_scenarios,
     get_all_transactions,
     get_cash_from_transactions,
     get_category_totals,
+    get_category_totals_for_month,
     get_config_value,
     get_date_range,
     get_monthly_net_aggregates,
@@ -34,11 +38,14 @@ from db.repository import (
     get_transaction_count,
     get_upload_audit_log,
     log_upload,
+    save_budget,
     save_scenario,
     set_config_value,
     upsert_transactions,
 )
 from utils.csv_utils import generate_template_csv, parse_and_validate
+from utils.currency_utils import CURRENCY_SYMBOLS, SUPPORTED_CURRENCIES, get_exchange_rate
+from utils.export_utils import generate_excel_export, generate_pdf_summary
 from utils.pdf_utils import parse_and_validate_pdf
 
 st.set_page_config(page_title="Financial Runway Simulator", layout="wide")
@@ -48,6 +55,53 @@ theme.set_theme(dark=not light_mode)
 theme.inject_custom_css()
 theme.register_altair_theme()
 
+# --- Auth gate ------------------------------------------------------------
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
+    st.session_state.auth_mode = None
+
+if not st.session_state.authenticated:
+    APP_USERNAME = os.environ.get("APP_USERNAME", "")
+    APP_PASSWORD = os.environ.get("APP_PASSWORD", "")
+
+    _, login_col, _ = st.columns([1, 2.4, 1])
+    with login_col:
+        with st.container(key="login_card"):
+            st.subheader("Sign In")
+            st.caption("Enter your credentials, or continue as a guest — no account required.")
+
+            field_col1, field_col2 = st.columns(2)
+            with field_col1:
+                login_username = st.text_input("Username")
+            with field_col2:
+                login_password = st.text_input("Password", type="password")
+
+            btn_col1, btn_col2 = st.columns(2)
+            with btn_col1:
+                login_clicked = st.button("Login", type="primary")
+            with btn_col2:
+                guest_clicked = st.button("Continue as Guest")
+
+            if login_clicked:
+                if APP_USERNAME and login_username == APP_USERNAME and login_password == APP_PASSWORD:
+                    st.session_state.authenticated = True
+                    st.session_state.auth_mode = "user"
+                    st.rerun()
+                else:
+                    st.error("Incorrect username or password.")
+
+            if guest_clicked:
+                st.session_state.authenticated = True
+                st.session_state.auth_mode = "guest"
+                st.rerun()
+    st.stop()
+
+with st.sidebar:
+    if st.button("Log Out"):
+        st.session_state.authenticated = False
+        st.session_state.auth_mode = None
+        st.rerun()
+
 session = SessionLocal()
 
 tx_count = get_transaction_count(session)
@@ -55,14 +109,18 @@ summed_cash = get_cash_from_transactions(session)
 override_value = get_config_value(session, STARTING_BALANCE_KEY)
 effective_cash = override_value if override_value is not None else summed_cash
 
+hero_pills = [
+    (date.today().strftime("%B %d, %Y"), theme.ACCENT_SECONDARY, "calendar"),
+    ("Database Connected", theme.SUCCESS, "check-circle"),
+    ("Live" if tx_count > 0 else "No Data Yet", theme.ACCENT if tx_count > 0 else theme.WARNING, "activity"),
+]
+if st.session_state.auth_mode == "guest":
+    hero_pills.append(("Guest Session", theme.WARNING, "activity"))
+
 theme.render_hero_header(
     subtitle="Real-time cash runway forecasting, financial planning, and executive "
     "scenario modeling powered by Python.",
-    pills=[
-        (date.today().strftime("%B %d, %Y"), theme.ACCENT_SECONDARY, "calendar"),
-        ("Database Connected", theme.SUCCESS, "check-circle"),
-        ("Live" if tx_count > 0 else "No Data Yet", theme.ACCENT if tx_count > 0 else theme.WARNING, "activity"),
-    ],
+    pills=hero_pills,
 )
 
 # --- Sidebar: Scenario Inputs -------------------------------------------------
@@ -75,9 +133,17 @@ with st.sidebar.container(border=True):
         value=float(effective_cash),
         step=100.0,
         format="%.2f",
-        help="Defaults to the Effective Starting Cash from Section 3. Adjusting it here "
+        help="Defaults to the Effective Starting Cash from Section 2. Adjusting it here "
         "only affects this what-if scenario, it does not save an override.",
     )
+    display_currency = st.selectbox("Display Currency", SUPPORTED_CURRENCIES, key="display_currency")
+    fx_rate = get_exchange_rate(display_currency)
+    if display_currency != "USD":
+        if fx_rate is not None:
+            symbol = CURRENCY_SYMBOLS.get(display_currency, "")
+            st.caption(f"≈ {symbol}{scenario_starting_cash * fx_rate:,.2f} {display_currency}")
+        else:
+            st.caption("Live exchange rate unavailable right now — showing USD only.")
 
 with st.sidebar.container(border=True):
     st.markdown("**Revenue Growth**")
@@ -221,6 +287,9 @@ with col3:
         icon="trending-up",
         help_text="Manual override if set, otherwise the summed transaction total.",
     )
+    if display_currency != "USD" and fx_rate is not None:
+        symbol = CURRENCY_SYMBOLS.get(display_currency, "")
+        st.caption(f"≈ {symbol}{float(effective_cash) * fx_rate:,.2f} {display_currency}")
 
 if tx_count > 0:
     min_date, max_date = get_date_range(session)
@@ -293,28 +362,35 @@ else:
     kpi_aggregates = get_monthly_net_aggregates(session, limit_months=3)
     kpi_avg_revenue, kpi_avg_expenses = compute_baseline(kpi_aggregates)
 
+    burn_multiple_str = "N/A"
+    monthly_revenue_str = "N/A"
+    gross_margin_str = "N/A"
+
     kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
     if kpi_avg_revenue > 0:
         burn_multiple = kpi_avg_expenses / kpi_avg_revenue
         gross_margin_pct = (kpi_avg_revenue - kpi_avg_expenses) / kpi_avg_revenue * 100
+        burn_multiple_str = f"{burn_multiple:.2f}x"
+        monthly_revenue_str = f"${kpi_avg_revenue:,.2f}"
+        gross_margin_str = f"{gross_margin_pct:.1f}%"
         with kpi_col1:
             theme.render_kpi_card(
                 "Burn Multiple",
-                f"{burn_multiple:.2f}x",
+                burn_multiple_str,
                 icon="scale",
                 help_text="Avg monthly expenses ÷ avg monthly revenue (trailing months).",
             )
         with kpi_col2:
             theme.render_kpi_card(
                 "Monthly Revenue",
-                f"${kpi_avg_revenue:,.2f}",
+                monthly_revenue_str,
                 icon="trending-up",
                 help_text="Average monthly revenue over the trailing months (labeled 'Monthly Revenue,' not 'MRR', since the schema doesn't track recurring vs. one-time revenue).",
             )
         with kpi_col3:
             theme.render_kpi_card(
                 "Gross Margin (approx.)",
-                f"{gross_margin_pct:.1f}%",
+                gross_margin_str,
                 icon="percent",
                 help_text="Uses total expenses as a stand-in for COGS, so treat as approximate.",
             )
@@ -346,6 +422,49 @@ else:
         icon="activity",
         help_text="Minimum Revenue Growth % Needed",
     )
+
+    st.divider()
+    theme.render_bullet_heading("Export Data")
+    export_col1, export_col2 = st.columns(2)
+    with export_col1:
+        min_date, max_date = get_date_range(session)
+        pdf_bytes = generate_pdf_summary(
+            kpis={
+                "Transactions in DB": str(tx_count),
+                "Sum of All Transactions": f"${summed_cash:,.2f}",
+                "Effective Starting Cash": f"${effective_cash:,.2f}",
+                "Burn Multiple": burn_multiple_str,
+                "Monthly Revenue": monthly_revenue_str,
+                "Gross Margin (approx.)": gross_margin_str,
+                "Break-Even Growth Rate": breakeven_value,
+            },
+            date_range=f"{min_date} to {max_date}",
+        )
+        st.download_button(
+            "Download PDF Summary",
+            data=pdf_bytes,
+            file_name="financial_runway_summary.pdf",
+            mime="application/pdf",
+        )
+    with export_col2:
+        export_transactions = get_all_transactions(session)
+        export_df = pd.DataFrame(
+            [
+                {
+                    "Date": t.transaction_date,
+                    "Description": t.description,
+                    "Amount": float(t.amount),
+                    "Category": t.category,
+                }
+                for t in export_transactions
+            ]
+        )
+        st.download_button(
+            "Download Excel (All Transactions)",
+            data=generate_excel_export(export_df),
+            file_name="financial_runway_transactions.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
 
 st.divider()
 
@@ -591,5 +710,77 @@ else:
         else:
             st.caption("Flagged using the IQR method (values outside 1.5x the interquartile range) — for review, not automatically excluded.")
             st.dataframe(outliers_df.rename(columns={"amount": "Amount"}))
+
+st.divider()
+
+# --- Section 6: Budget vs. Actual Tracking --------------------------------------
+st.header("6. Budget vs. Actual Tracking")
+
+if tx_count == 0:
+    st.info("Upload historical transactions in Section 1 above to set budgets.")
+else:
+    st.caption(
+        "Set a monthly budget per category, then compare it against your actual "
+        "spend for the most recent month with data."
+    )
+
+    available_categories = sorted({cat for cat, total in get_category_totals(session) if total < 0})
+    existing_budgets = get_all_budgets(session)
+
+    with st.expander("Set / Update a Budget"):
+        if available_categories:
+            budget_category = st.selectbox("Category", available_categories, key="budget_category")
+            budget_amount = st.number_input(
+                "Monthly Budget ($)", min_value=0.0, step=50.0, format="%.2f", key="budget_amount"
+            )
+            if st.button("Save Budget"):
+                save_budget(session, budget_category, Decimal(str(budget_amount)))
+                st.success(f"Budget saved for '{budget_category}'.")
+        else:
+            st.caption("No expense categories found in your data yet.")
+
+    if not existing_budgets:
+        st.caption("No budgets set yet. Use 'Set / Update a Budget' above to add one.")
+    else:
+        latest_month = get_monthly_net_aggregates(session, limit_months=1)
+        if not latest_month:
+            st.caption("No monthly data available to compare against.")
+        else:
+            month_start, _, _ = latest_month[0]
+            actual_totals = dict(get_category_totals_for_month(session, month_start))
+
+            budget_rows = []
+            for b in existing_budgets:
+                actual_amount = actual_totals.get(b.category)
+                actual_expense = float(-actual_amount) if actual_amount is not None and actual_amount < 0 else 0.0
+                budget_rows.append(
+                    {"Category": b.category, "Type": "Budgeted", "Amount": float(b.monthly_budget)}
+                )
+                budget_rows.append({"Category": b.category, "Type": "Actual", "Amount": actual_expense})
+
+            budget_df = pd.DataFrame(budget_rows)
+            st.caption(f"Actual spend shown is for {month_start.strftime('%B %Y')} (most recent month with data).")
+            budget_chart = (
+                alt.Chart(budget_df)
+                .mark_bar()
+                .encode(
+                    x=alt.X("Category:N", title=None),
+                    xOffset="Type:N",
+                    y=alt.Y("Amount:Q", title="Amount ($)"),
+                    color="Type:N",
+                    tooltip=["Category:N", "Type:N", alt.Tooltip("Amount:Q", format=",.2f")],
+                )
+            )
+            st.altair_chart(budget_chart, use_container_width=True)
+
+        with st.expander("Manage Budgets"):
+            for b in existing_budgets:
+                b_col1, b_col2 = st.columns([3, 1])
+                with b_col1:
+                    st.write(f"{b.category}: ${float(b.monthly_budget):,.2f} / month")
+                with b_col2:
+                    if st.button("Delete", key=f"delete_budget_{b.id}"):
+                        delete_budget(session, b.id)
+                        st.rerun()
 
 session.close()

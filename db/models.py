@@ -45,6 +45,16 @@ class Scenario(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class Budget(Base):
+    __tablename__ = "budgets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    category = Column(String, nullable=False, unique=True)
+    monthly_budget = Column(Numeric(14, 2), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
 class UploadAuditLog(Base):
     __tablename__ = "upload_audit_log"
 

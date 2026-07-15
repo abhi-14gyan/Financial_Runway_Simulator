@@ -126,7 +126,7 @@ def inject_custom_css() -> None:
         }}
         [data-testid="stSidebar"] .block-container {{ padding: 32px 20px; }}
 
-        [data-testid="stVerticalBlockBorderWrapper"] {{
+        [data-testid="stSidebar"] [data-testid="stVerticalBlockBorderWrapper"] {{
             background-color: {CARD_SECONDARY};
             border: 1px solid {BORDER} !important;
             border-radius: 16px !important;
@@ -250,13 +250,32 @@ def inject_custom_css() -> None:
         div[class*="st-key-trend_chart"] > div,
         div[class*="st-key-prob_chart"] > div,
         div[class*="st-key-upload_section"] > div {{
+            background-color: {CARD_SECONDARY} !important;
+            border: 1px solid {BORDER} !important;
             border-radius: 20px !important;
             padding: 28px !important;
             box-shadow: 0 0 0 1px rgba(79,140,255,.08), 0 20px 60px rgba(79,140,255,.14) !important;
             animation: fadeIn 500ms ease;
         }}
 
+        div[class*="st-key-login_card"] {{
+            background-color: {CARD} !important;
+            border: 1px solid {BORDER} !important;
+            border-radius: 20px !important;
+            padding: 28px !important;
+            box-shadow: 0 0 0 1px rgba(79,140,255,.08), 0 20px 60px rgba(79,140,255,.14) !important;
+        }}
+        div[class*="st-key-login_card"] [data-testid="stVerticalBlockBorderWrapper"],
+        div[class*="st-key-login_card"] [data-testid="stVerticalBlock"] {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin-bottom: 0 !important;
+        }}
+
         div[class*="st-key-recent_tx_card"] > div {{
+            background-color: {CARD_SECONDARY} !important;
             border-radius: 20px !important;
             padding: 20px !important;
             border: 2px solid {ACCENT} !important;
