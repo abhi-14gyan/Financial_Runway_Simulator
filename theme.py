@@ -1,18 +1,75 @@
 import altair as alt
 import streamlit as st
 
-BG = "#09090B"
-CARD = "#111217"
-CARD_SECONDARY = "#181A20"
-BORDER = "rgba(255,255,255,.06)"
-ACCENT = "#4F8CFF"
-ACCENT_SECONDARY = "#6EE7FF"
-SUCCESS = "#22C55E"
-DANGER = "#EF4444"
-WARNING = "#F59E0B"
-TEXT_PRIMARY = "#FFFFFF"
-TEXT_SECONDARY = "rgba(255,255,255,.72)"
-TEXT_MUTED = "rgba(255,255,255,.45)"
+_DARK_PALETTE = {
+    "BG": "#09090B",
+    "CARD": "#111217",
+    "CARD_SECONDARY": "#181A20",
+    "BORDER": "rgba(255,255,255,.06)",
+    "ACCENT": "#4F8CFF",
+    "ACCENT_SECONDARY": "#6EE7FF",
+    "SUCCESS": "#22C55E",
+    "DANGER": "#EF4444",
+    "WARNING": "#F59E0B",
+    "TEXT_PRIMARY": "#FFFFFF",
+    "TEXT_SECONDARY": "rgba(255,255,255,.72)",
+    "TEXT_MUTED": "rgba(255,255,255,.45)",
+    "CHART_DOMAIN": "rgba(255,255,255,.12)",
+    "CHART_GRID": "rgba(255,255,255,.06)",
+}
+
+_LIGHT_PALETTE = {
+    "BG": "#F7F8FA",
+    "CARD": "#FFFFFF",
+    "CARD_SECONDARY": "#F1F3F6",
+    "BORDER": "rgba(0,0,0,.08)",
+    "ACCENT": "#2563EB",
+    "ACCENT_SECONDARY": "#0EA5E9",
+    "SUCCESS": "#16A34A",
+    "DANGER": "#DC2626",
+    "WARNING": "#D97706",
+    "TEXT_PRIMARY": "#0B0D12",
+    "TEXT_SECONDARY": "rgba(11,13,18,.72)",
+    "TEXT_MUTED": "rgba(11,13,18,.45)",
+    "CHART_DOMAIN": "rgba(0,0,0,.15)",
+    "CHART_GRID": "rgba(0,0,0,.08)",
+}
+
+BG = _DARK_PALETTE["BG"]
+CARD = _DARK_PALETTE["CARD"]
+CARD_SECONDARY = _DARK_PALETTE["CARD_SECONDARY"]
+BORDER = _DARK_PALETTE["BORDER"]
+ACCENT = _DARK_PALETTE["ACCENT"]
+ACCENT_SECONDARY = _DARK_PALETTE["ACCENT_SECONDARY"]
+SUCCESS = _DARK_PALETTE["SUCCESS"]
+DANGER = _DARK_PALETTE["DANGER"]
+WARNING = _DARK_PALETTE["WARNING"]
+TEXT_PRIMARY = _DARK_PALETTE["TEXT_PRIMARY"]
+TEXT_SECONDARY = _DARK_PALETTE["TEXT_SECONDARY"]
+TEXT_MUTED = _DARK_PALETTE["TEXT_MUTED"]
+CHART_DOMAIN = _DARK_PALETTE["CHART_DOMAIN"]
+CHART_GRID = _DARK_PALETTE["CHART_GRID"]
+
+
+def set_theme(dark: bool = True) -> None:
+    global BG, CARD, CARD_SECONDARY, BORDER, ACCENT, ACCENT_SECONDARY
+    global SUCCESS, DANGER, WARNING, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED
+    global CHART_DOMAIN, CHART_GRID
+    palette = _DARK_PALETTE if dark else _LIGHT_PALETTE
+    BG = palette["BG"]
+    CARD = palette["CARD"]
+    CARD_SECONDARY = palette["CARD_SECONDARY"]
+    BORDER = palette["BORDER"]
+    ACCENT = palette["ACCENT"]
+    ACCENT_SECONDARY = palette["ACCENT_SECONDARY"]
+    SUCCESS = palette["SUCCESS"]
+    DANGER = palette["DANGER"]
+    WARNING = palette["WARNING"]
+    TEXT_PRIMARY = palette["TEXT_PRIMARY"]
+    TEXT_SECONDARY = palette["TEXT_SECONDARY"]
+    TEXT_MUTED = palette["TEXT_MUTED"]
+    CHART_DOMAIN = palette["CHART_DOMAIN"]
+    CHART_GRID = palette["CHART_GRID"]
 
 ICONS = {
     "wallet": '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4"/><path d="M3 5v14a2 2 0 0 0 2 2h16v-5"/><path d="M18 12a2 2 0 0 0 0 4h4v-4Z"/></svg>',
@@ -52,7 +109,7 @@ def inject_custom_css() -> None:
         [data-testid="stHeadingWithActionElements"] h3 * {{ color: {TEXT_PRIMARY} !important; }}
         h2, [data-testid="stHeadingWithActionElements"] h2,
         h2 *, [data-testid="stHeadingWithActionElements"] h2 * {{
-            font-size: 22px !important;
+            font-size: 23px !important;
             font-weight: 700 !important;
             margin-top: 10px;
         }}
@@ -189,12 +246,95 @@ def inject_custom_css() -> None:
         .hero-chart-title {{ font-size: 20px; font-weight: 700; color: {TEXT_PRIMARY}; }}
         .hero-chart-subtitle {{ font-size: 13px; color: {TEXT_MUTED}; margin-bottom: 12px; }}
 
-        div[class*="st-key-hero_chart"] > div {{
+        div[class*="st-key-hero_chart"] > div,
+        div[class*="st-key-trend_chart"] > div,
+        div[class*="st-key-prob_chart"] > div,
+        div[class*="st-key-upload_section"] > div {{
             border-radius: 20px !important;
             padding: 28px !important;
             box-shadow: 0 0 0 1px rgba(79,140,255,.08), 0 20px 60px rgba(79,140,255,.14) !important;
             animation: fadeIn 500ms ease;
         }}
+
+        div[class*="st-key-recent_tx_card"] > div {{
+            border-radius: 20px !important;
+            padding: 20px !important;
+            border: 2px solid {ACCENT} !important;
+            box-shadow: none !important;
+        }}
+
+        input, textarea,
+        [data-baseweb="input"], [data-baseweb="base-input"],
+        [data-baseweb="select"] > div {{
+            background-color: {CARD} !important;
+            color: {TEXT_PRIMARY} !important;
+            border-color: {ACCENT} !important;
+        }}
+        [data-baseweb="popover"] {{
+            background-color: {CARD} !important;
+        }}
+        [data-baseweb="menu"] {{
+            background-color: {CARD} !important;
+            color: {TEXT_PRIMARY} !important;
+        }}
+        [data-testid="stNumberInputStepUp"], [data-testid="stNumberInputStepDown"] {{
+            background-color: {ACCENT} !important;
+            color: #FFFFFF !important;
+            border-color: {ACCENT} !important;
+        }}
+        [data-testid="stNumberInputStepUp"] svg, [data-testid="stNumberInputStepDown"] svg {{
+            fill: #FFFFFF !important;
+            color: #FFFFFF !important;
+        }}
+        [data-testid="stNumberInputStepUp"]:hover, [data-testid="stNumberInputStepDown"]:hover {{
+            background-color: {ACCENT_SECONDARY} !important;
+            border-color: {ACCENT_SECONDARY} !important;
+        }}
+
+        [data-testid="stTable"] table {{
+            background-color: {CARD} !important;
+            color: {TEXT_PRIMARY} !important;
+        }}
+        [data-testid="stTable"] th {{
+            background-color: {CARD_SECONDARY} !important;
+            color: {TEXT_PRIMARY} !important;
+            border-color: {BORDER} !important;
+        }}
+        [data-testid="stTable"] td {{
+            background-color: {CARD} !important;
+            color: {TEXT_PRIMARY} !important;
+            border-color: {BORDER} !important;
+        }}
+
+        hr {{ margin: 14px 0 !important; opacity: .5; }}
+
+        [data-testid="stFileUploaderDropzone"] {{
+            background: {CARD_SECONDARY};
+            border: 2px dashed rgba(79,140,255,.35) !important;
+            border-radius: 16px;
+            transition: border-color 200ms ease, box-shadow 200ms ease;
+        }}
+        [data-testid="stFileUploaderDropzone"]:hover {{
+            border-color: {ACCENT} !important;
+            box-shadow: 0 8px 24px rgba(79,140,255,.18);
+        }}
+        [data-testid="stFileUploaderDropzone"] button {{
+            border-radius: 12px;
+            border: 1px solid {BORDER};
+            background: {CARD};
+            color: {TEXT_PRIMARY};
+            font-weight: 600;
+            transition: all 200ms ease;
+        }}
+        [data-testid="stFileUploaderDropzone"] button:hover {{
+            transform: translateY(-2px);
+            border-color: {ACCENT};
+            box-shadow: 0 8px 24px rgba(79,140,255,.25);
+        }}
+
+        .bullet-heading {{ display: flex; align-items: center; gap: 10px; margin: 8px 0 4px 0; }}
+        .bullet-dot {{ width: 9px; height: 9px; border-radius: 50%; background: linear-gradient(135deg, {ACCENT}, {ACCENT_SECONDARY}); flex-shrink: 0; }}
+        .bullet-text {{ font-size: 22px; font-weight: 600; color: {TEXT_PRIMARY}; }}
 
         .sidebar-title {{
             font-size: 13px;
@@ -250,6 +390,14 @@ def render_kpi_card(label: str, value: str, delta: float | None = None, icon: st
     st.markdown(card_html, unsafe_allow_html=True)
 
 
+def render_bullet_heading(text: str) -> None:
+    st.markdown(
+        '<div class="bullet-heading"><span class="bullet-dot"></span>'
+        f'<span class="bullet-text">{text}</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
 def register_altair_theme() -> None:
     def _premium_dark_theme():
         return {
@@ -257,9 +405,9 @@ def register_altair_theme() -> None:
                 "background": "transparent",
                 "view": {"stroke": "transparent", "continuousHeight": 380},
                 "axis": {
-                    "domainColor": "rgba(255,255,255,.12)",
-                    "gridColor": "rgba(255,255,255,.06)",
-                    "tickColor": "rgba(255,255,255,.12)",
+                    "domainColor": CHART_DOMAIN,
+                    "gridColor": CHART_GRID,
+                    "tickColor": CHART_DOMAIN,
                     "labelColor": TEXT_SECONDARY,
                     "titleColor": TEXT_SECONDARY,
                     "labelFontSize": 11,

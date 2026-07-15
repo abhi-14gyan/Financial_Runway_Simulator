@@ -42,6 +42,9 @@ from utils.csv_utils import generate_template_csv, parse_and_validate
 from utils.pdf_utils import parse_and_validate_pdf
 
 st.set_page_config(page_title="Financial Runway Simulator", layout="wide")
+
+light_mode = st.sidebar.toggle("Light Theme", key="light_theme", value=False)
+theme.set_theme(dark=not light_mode)
 theme.inject_custom_css()
 theme.register_altair_theme()
 
@@ -101,111 +104,110 @@ with st.sidebar.container(border=True):
     )
 
 # --- Section 1: Upload & Ingest ---------------------------------------------
-st.header("1. Upload Historical Transactions")
-st.caption(
-    "PDF support reads embedded text from digitally-exported bank statements. "
-    "It is not image OCR, so scanned/photographed statements won't work — use CSV instead."
-)
-uploaded_file = st.file_uploader("Choose a CSV or PDF file", type=["csv", "pdf"])
+with st.container(border=True, key="upload_section"):
+    st.header("1. Upload Historical Transactions")
+    uploaded_file = st.file_uploader(
+        "Choose a CSV or PDF file  (PDF support reads embedded text only (not OCR) — "
+        "use CSV for scanned statements.)",
+        type=["csv", "pdf"],
+    )
 
-if uploaded_file is not None:
-    try:
-        if uploaded_file.name.lower().endswith(".pdf"):
-            valid_df, rejected_df = parse_and_validate_pdf(uploaded_file)
+    if uploaded_file is not None:
+        try:
+            if uploaded_file.name.lower().endswith(".pdf"):
+                valid_df, rejected_df = parse_and_validate_pdf(uploaded_file)
+            else:
+                valid_df, rejected_df = parse_and_validate(uploaded_file)
+        except ValueError as e:
+            st.error(str(e))
         else:
-            valid_df, rejected_df = parse_and_validate(uploaded_file)
-    except ValueError as e:
-        st.error(str(e))
-    else:
-        st.subheader("Preview")
-        st.write(f"{len(valid_df)} valid row(s), {len(rejected_df)} rejected row(s).")
-        st.dataframe(valid_df.head(20))
+            st.subheader("Preview")
+            st.write(f"{len(valid_df)} valid row(s), {len(rejected_df)} rejected row(s).")
+            st.dataframe(valid_df.head(20))
 
-        if not rejected_df.empty:
-            with st.expander(f"View {len(rejected_df)} rejected row(s)"):
-                st.dataframe(rejected_df)
+            if not rejected_df.empty:
+                with st.expander(f"View {len(rejected_df)} rejected row(s)"):
+                    st.dataframe(rejected_df)
 
-        if not valid_df.empty and st.button("Ingest into Database"):
-            inserted = upsert_transactions(session, valid_df)
-            duplicates = len(valid_df) - inserted
-            file_type = "pdf" if uploaded_file.name.lower().endswith(".pdf") else "csv"
-            log_upload(
-                session,
-                filename=uploaded_file.name,
-                file_type=file_type,
-                rows_inserted=inserted,
-                rows_duplicate=duplicates,
-                rows_rejected=len(rejected_df),
+            if not valid_df.empty and st.button("Ingest into Database"):
+                inserted = upsert_transactions(session, valid_df)
+                duplicates = len(valid_df) - inserted
+                file_type = "pdf" if uploaded_file.name.lower().endswith(".pdf") else "csv"
+                log_upload(
+                    session,
+                    filename=uploaded_file.name,
+                    file_type=file_type,
+                    rows_inserted=inserted,
+                    rows_duplicate=duplicates,
+                    rows_rejected=len(rejected_df),
+                )
+                st.success(
+                    f"Ingestion complete: {inserted} new row(s) inserted, "
+                    f"{duplicates} duplicate row(s) skipped."
+                )
+
+    exp_col1, exp_col2, exp_col3 = st.columns(3)
+
+    with exp_col1:
+        with st.expander("Prefer to use a CSV instead? Download the template"):
+            st.write(
+                "Format your export exactly as: `Date, Description, Amount, Category`. "
+                "Amount should be positive for revenue/funding and negative for expenses."
             )
-            st.success(
-                f"Ingestion complete: {inserted} new row(s) inserted, "
-                f"{duplicates} duplicate row(s) skipped."
+            st.download_button(
+                label="Download CSV Template",
+                data=generate_template_csv(),
+                file_name="transaction_template.csv",
+                mime="text/csv",
             )
 
-with st.expander("Prefer to use a CSV instead? Download the template"):
-    st.write(
-        "Format your export exactly as: `Date, Description, Amount, Category`. "
-        "Amount should be positive for revenue/funding and negative for expenses."
-    )
-    st.download_button(
-        label="Download CSV Template",
-        data=generate_template_csv(),
-        file_name="transaction_template.csv",
-        mime="text/csv",
-    )
+    with exp_col2:
+        with st.expander("View Upload History (Audit Trail)"):
+            audit_log = get_upload_audit_log(session)
+            if audit_log:
+                st.dataframe(
+                    [
+                        {
+                            "Uploaded At": entry.uploaded_at,
+                            "Uploaded By": entry.uploaded_by,
+                            "Filename": entry.filename,
+                            "Type": entry.file_type,
+                            "Inserted": entry.rows_inserted,
+                            "Duplicates Skipped": entry.rows_duplicate,
+                            "Rejected": entry.rows_rejected,
+                        }
+                        for entry in audit_log
+                    ]
+                )
+            else:
+                st.caption("No uploads recorded yet.")
 
-with st.expander("View Upload History (Audit Trail)"):
-    audit_log = get_upload_audit_log(session)
-    if audit_log:
-        st.dataframe(
-            [
-                {
-                    "Uploaded At": entry.uploaded_at,
-                    "Uploaded By": entry.uploaded_by,
-                    "Filename": entry.filename,
-                    "Type": entry.file_type,
-                    "Inserted": entry.rows_inserted,
-                    "Duplicates Skipped": entry.rows_duplicate,
-                    "Rejected": entry.rows_rejected,
-                }
-                for entry in audit_log
-            ]
-        )
-    else:
-        st.caption("No uploads recorded yet.")
+    with exp_col3:
+        with st.expander("Starting Bank Balance Override (Optional)"):
+            st.write("Overrides the summed transaction total as your starting cash.")
+
+            current_override = get_config_value(session, STARTING_BALANCE_KEY)
+            override_input = st.number_input(
+                "Reconciled bank balance",
+                value=float(current_override) if current_override is not None else 0.0,
+                step=100.0,
+                format="%.2f",
+            )
+
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Save Override"):
+                    set_config_value(session, STARTING_BALANCE_KEY, Decimal(str(override_input)))
+                    st.success("Starting balance override saved.")
+            with col2:
+                if st.button("Clear Override"):
+                    clear_config_value(session, STARTING_BALANCE_KEY)
+                    st.success("Override cleared. Will fall back to summed transactions.")
 
 st.divider()
 
-# --- Section 2: Starting Bank Balance Override -------------------------------
-st.header("2. Starting Bank Balance Override (Optional)")
-st.write(
-    "If set, this value is used as the baseline starting cash instead of the "
-    "sum of historical transactions — useful for reconciling against an "
-    "actual bank statement balance."
-)
-
-current_override = get_config_value(session, STARTING_BALANCE_KEY)
-override_input = st.number_input(
-    "Reconciled bank balance",
-    value=float(current_override) if current_override is not None else 0.0,
-    step=100.0,
-    format="%.2f",
-)
-
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("Save Override"):
-        set_config_value(session, STARTING_BALANCE_KEY, Decimal(str(override_input)))
-        st.success("Starting balance override saved.")
-with col2:
-    if st.button("Clear Override"):
-        clear_config_value(session, STARTING_BALANCE_KEY)
-        st.success("Override cleared. Will fall back to summed transactions.")
-
-st.divider()
-
-# --- Section 3: Current Data Summary -----------------------------------------
-st.header("3. Current Data Summary")
+# --- Section 2: Current Data Summary -----------------------------------------
+st.header("2. Current Data Summary")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -224,24 +226,73 @@ if tx_count > 0:
     min_date, max_date = get_date_range(session)
     st.write(f"Historical data range: **{min_date}** to **{max_date}**")
 
-    st.subheader("Most Recent Transactions")
-    recent = get_recent_transactions(session, limit=20)
-    st.dataframe(
-        [
-            {
-                "Date": t.transaction_date,
-                "Description": t.description,
-                "Amount": float(t.amount),
-                "Category": t.category,
-            }
-            for t in recent
-        ]
-    )
+    with st.container(border=True, key="recent_tx_card"):
+        with st.expander("Most Recent Transactions"):
+            recent = get_recent_transactions(session, limit=20)
+            st.table(
+                [
+                    {
+                        "Date": t.transaction_date,
+                        "Description": t.description,
+                        "Amount": float(t.amount),
+                        "Category": t.category,
+                    }
+                    for t in recent
+                ]
+            )
 
+    category_totals = get_category_totals(session)
+    expense_categories = [(cat, float(-total)) for cat, total in category_totals if total < 0]
+    if expense_categories:
+        st.subheader("Spend by Category")
+        spend_df = pd.DataFrame(expense_categories, columns=["Category", "Amount"])
+        category_chart = (
+            alt.Chart(spend_df)
+            .mark_bar()
+            .encode(
+                x=alt.X("Amount:Q", title="Total Spend ($)"),
+                y=alt.Y("Category:N", sort="-x"),
+                tooltip=["Category:N", alt.Tooltip("Amount:Q", format=",.2f")],
+            )
+        )
+        st.altair_chart(category_chart, use_container_width=True)
+
+    all_monthly_aggregates = get_monthly_net_aggregates(session, limit_months=None)
+    if all_monthly_aggregates:
+        with st.container(border=True, key="trend_chart"):
+            st.subheader("Monthly Revenue vs. Expense Trend")
+            if len(all_monthly_aggregates) == 1:
+                st.caption("Only 1 month of data so far — showing a single point. Upload more months to see a real trend line.")
+            trend_rows = []
+            for month_start, revenue, expense in all_monthly_aggregates:
+                trend_rows.append({"Month": month_start, "Type": "Revenue", "Amount": float(revenue)})
+                trend_rows.append({"Month": month_start, "Type": "Expense", "Amount": float(expense)})
+            trend_df = pd.DataFrame(trend_rows)
+            trend_chart = (
+                alt.Chart(trend_df)
+                .mark_line(point=True)
+                .encode(
+                    x=alt.X("Month:T"),
+                    y=alt.Y("Amount:Q", title="Amount ($)"),
+                    color="Type:N",
+                    tooltip=["Month:T", "Type:N", alt.Tooltip("Amount:Q", format=",.2f")],
+                )
+            )
+            st.altair_chart(trend_chart, use_container_width=True)
+else:
+    st.info("No transactions yet. Upload a CSV above to get started.")
+
+st.divider()
+
+# --- Section 3: Key Performance Indicators ------------------------------------
+st.header("3. Key Performance Indicators")
+
+if tx_count == 0:
+    st.info("Upload historical transactions in Section 1 above to see KPIs.")
+else:
     kpi_aggregates = get_monthly_net_aggregates(session, limit_months=3)
     kpi_avg_revenue, kpi_avg_expenses = compute_baseline(kpi_aggregates)
 
-    st.subheader("Key Performance Indicators")
     kpi_col1, kpi_col2, kpi_col3 = st.columns(3)
     if kpi_avg_revenue > 0:
         burn_multiple = kpi_avg_expenses / kpi_avg_revenue
@@ -295,69 +346,6 @@ if tx_count > 0:
         icon="activity",
         help_text="Minimum Revenue Growth % Needed",
     )
-
-    category_totals = get_category_totals(session)
-    expense_categories = [(cat, float(-total)) for cat, total in category_totals if total < 0]
-    if expense_categories:
-        st.subheader("Spend by Category")
-        spend_df = pd.DataFrame(expense_categories, columns=["Category", "Amount"])
-        category_chart = (
-            alt.Chart(spend_df)
-            .mark_bar()
-            .encode(
-                x=alt.X("Amount:Q", title="Total Spend ($)"),
-                y=alt.Y("Category:N", sort="-x"),
-                tooltip=["Category:N", alt.Tooltip("Amount:Q", format=",.2f")],
-            )
-        )
-        st.altair_chart(category_chart, use_container_width=True)
-
-    all_monthly_aggregates = get_monthly_net_aggregates(session, limit_months=None)
-    if all_monthly_aggregates:
-        st.subheader("Monthly Revenue vs. Expense Trend")
-        if len(all_monthly_aggregates) == 1:
-            st.caption("Only 1 month of data so far — showing a single point. Upload more months to see a real trend line.")
-        trend_rows = []
-        for month_start, revenue, expense in all_monthly_aggregates:
-            trend_rows.append({"Month": month_start, "Type": "Revenue", "Amount": float(revenue)})
-            trend_rows.append({"Month": month_start, "Type": "Expense", "Amount": float(expense)})
-        trend_df = pd.DataFrame(trend_rows)
-        trend_chart = (
-            alt.Chart(trend_df)
-            .mark_line(point=True)
-            .encode(
-                x=alt.X("Month:T"),
-                y=alt.Y("Amount:Q", title="Amount ($)"),
-                color="Type:N",
-                tooltip=["Month:T", "Type:N", alt.Tooltip("Amount:Q", format=",.2f")],
-            )
-        )
-        st.altair_chart(trend_chart, use_container_width=True)
-
-    st.subheader("Potential Outliers")
-    all_transactions = get_all_transactions(session)
-    if len(all_transactions) < 5:
-        st.caption("Not enough data yet to detect outliers reliably (need at least 5 transactions).")
-    else:
-        all_tx_df = pd.DataFrame(
-            [
-                {
-                    "Date": t.transaction_date,
-                    "Description": t.description,
-                    "amount": float(t.amount),
-                    "Category": t.category,
-                }
-                for t in all_transactions
-            ]
-        )
-        outliers_df = detect_outliers(all_tx_df)
-        if outliers_df.empty:
-            st.caption("No outliers detected using the IQR method (values outside 1.5x the interquartile range).")
-        else:
-            st.caption("Flagged using the IQR method (values outside 1.5x the interquartile range) — for review, not automatically excluded.")
-            st.dataframe(outliers_df.rename(columns={"amount": "Amount"}))
-else:
-    st.info("No transactions yet. Upload a CSV above to get started.")
 
 st.divider()
 
@@ -417,7 +405,7 @@ else:
         )
         st.altair_chart(chart, use_container_width=True)
 
-    st.subheader("Executive Report")
+    theme.render_bullet_heading("Executive Report")
     if st.button("Generate AI Executive Report"):
         params = {
             "starting_cash": scenario_starting_cash,
@@ -431,13 +419,10 @@ else:
             report = generate_executive_report(params, projection_df)
         st.info(report)
 
-    st.subheader("Sensitivity Analysis")
+    theme.render_bullet_heading("Sensitivity Analysis")
     st.caption(
-        "Which lever moves the 24-month ending cash the most? Each lever is swung "
-        "between its slider's min and max, holding the other two at their current values. "
-        "Revenue Growth is capped to ±20% here (narrower than its slider's full 100% max) "
-        "so all three bars stay on a comparable, readable scale — see the note above about "
-        "monthly compounding for why the uncapped range would otherwise dominate the chart."
+        "Which lever affects your 24-month cash the most? Revenue Growth is capped "
+        "to ±20% here for a fair comparison."
     )
     sensitivity_df = sensitivity_analysis(
         start_date=date.today(),
@@ -470,41 +455,42 @@ else:
     )
     st.altair_chart(tornado_chart, use_container_width=True)
 
-    st.subheader("Probabilistic Projection")
-    revenue_std, expense_std = compute_baseline_std(monthly_aggregates)
-    if revenue_std is None:
-        st.caption("Not enough historical months (need at least 2) to model uncertainty yet.")
-    else:
-        if len(monthly_aggregates) == 2:
-            st.caption(
-                "Based on only 2 months of data — this is a very rough uncertainty "
-                "estimate, not a robust one."
+    with st.container(border=True, key="prob_chart"):
+        st.subheader("Probabilistic Projection")
+        revenue_std, expense_std = compute_baseline_std(monthly_aggregates)
+        if revenue_std is None:
+            st.caption("Not enough historical months (need at least 2) to model uncertainty yet.")
+        else:
+            if len(monthly_aggregates) == 2:
+                st.caption(
+                    "Based on only 2 months of data — this is a very rough uncertainty "
+                    "estimate, not a robust one."
+                )
+            mc_df = monte_carlo_projection(
+                start_date=date.today(),
+                starting_cash=scenario_starting_cash,
+                avg_monthly_revenue=avg_monthly_revenue,
+                avg_monthly_expenses=avg_monthly_expenses,
+                revenue_std=revenue_std,
+                expense_std=expense_std,
+                revenue_growth_pct=revenue_growth_pct,
+                new_headcount_cost=new_headcount_cost,
+                overhead_increase_pct=overhead_increase_pct,
+                months=24,
+                num_simulations=500,
+                seed=42,
             )
-        mc_df = monte_carlo_projection(
-            start_date=date.today(),
-            starting_cash=scenario_starting_cash,
-            avg_monthly_revenue=avg_monthly_revenue,
-            avg_monthly_expenses=avg_monthly_expenses,
-            revenue_std=revenue_std,
-            expense_std=expense_std,
-            revenue_growth_pct=revenue_growth_pct,
-            new_headcount_cost=new_headcount_cost,
-            overhead_increase_pct=overhead_increase_pct,
-            months=24,
-            num_simulations=500,
-            seed=42,
-        )
-        band = (
-            alt.Chart(mc_df)
-            .mark_area(opacity=0.3)
-            .encode(
-                x=alt.X("date:T", title="Month"),
-                y=alt.Y("p10:Q", title="Projected Cash Balance ($)"),
-                y2="p90:Q",
+            band = (
+                alt.Chart(mc_df)
+                .mark_area(opacity=0.3)
+                .encode(
+                    x=alt.X("date:T", title="Month"),
+                    y=alt.Y("p10:Q", title="Projected Cash Balance ($)"),
+                    y2="p90:Q",
+                )
             )
-        )
-        median_line = alt.Chart(mc_df).mark_line(color="black").encode(x="date:T", y="p50:Q")
-        st.altair_chart(band + median_line, use_container_width=True)
+            median_line = alt.Chart(mc_df).mark_line(color="black").encode(x="date:T", y="p50:Q")
+            st.altair_chart(band + median_line, use_container_width=True)
 
     st.subheader("Save & Compare Scenarios")
     scenario_name = st.text_input("Scenario name")
@@ -575,5 +561,35 @@ else:
                 st.success(f"Deleted '{delete_name}'. Refresh the page to update the list.")
     else:
         st.caption("No saved scenarios yet. Save your current slider settings above to start comparing.")
+
+st.divider()
+
+# --- Section 5: Potential Outliers ---------------------------------------------
+st.header("5. Potential Outliers")
+
+if tx_count == 0:
+    st.info("Upload historical transactions in Section 1 above to see outlier detection.")
+else:
+    all_transactions = get_all_transactions(session)
+    if len(all_transactions) < 5:
+        st.caption("Not enough data yet to detect outliers reliably (need at least 5 transactions).")
+    else:
+        all_tx_df = pd.DataFrame(
+            [
+                {
+                    "Date": t.transaction_date,
+                    "Description": t.description,
+                    "amount": float(t.amount),
+                    "Category": t.category,
+                }
+                for t in all_transactions
+            ]
+        )
+        outliers_df = detect_outliers(all_tx_df)
+        if outliers_df.empty:
+            st.caption("No outliers detected using the IQR method (values outside 1.5x the interquartile range).")
+        else:
+            st.caption("Flagged using the IQR method (values outside 1.5x the interquartile range) — for review, not automatically excluded.")
+            st.dataframe(outliers_df.rename(columns={"amount": "Amount"}))
 
 session.close()
