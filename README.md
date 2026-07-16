@@ -4,17 +4,17 @@
 
 ## Screenshots
 
-| Login (with Guest Access) | Dashboard Overview |
+| Dashboard Overview | Key Performance Indicators |
 |---|---|
-| ![Login screen with guest access option](screenshots/Screenshot_login.png) | ![Hero header, sidebar controls, and upload card](screenshots/Screenshot_header.png) |
+| ![Hero header, sidebar controls, and upload card](screenshots/Screenshot_header.png) | ![KPI cards for burn multiple, monthly revenue, gross margin, break-even](screenshots/Screenshot_kpi.png) |
 
-| Key Performance Indicators | Scenario Projection |
+| Scenario Projection | Sensitivity & Probabilistic Analysis |
 |---|---|
-| ![KPI cards for burn multiple, monthly revenue, gross margin, break-even](screenshots/Screenshot_kpi.png) | ![24-month scenario projection chart with sliders](screenshots/Screenshot_scenario_projection.png) |
+| ![24-month scenario projection chart with sliders](screenshots/Screenshot_scenario_projection.png) | ![Sensitivity tornado chart and Monte Carlo probability band](screenshots/Screenshot_sensitivity_analysis.png) |
 
-| Sensitivity & Probabilistic Analysis | Budget vs. Actual Tracking |
-|---|---|
-| ![Sensitivity tornado chart and Monte Carlo probability band](screenshots/Screenshot_sensitivity_analysis.png) | ![Budget vs actual tracking chart per category](screenshots/Screenshot_budget.png) |
+**Budget vs. Actual Tracking**
+
+![Budget vs actual tracking chart per category](screenshots/Screenshot_budget.png)
 
 ## Why this is a B2B SaaS product
 
