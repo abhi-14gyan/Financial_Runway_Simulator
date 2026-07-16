@@ -2,6 +2,20 @@
 
 **A B2B SaaS financial analytics platform for startup finance teams and founders — real-time cash runway forecasting, scenario modeling, and AI-powered executive reporting, delivered entirely in the browser.**
 
+## Screenshots
+
+| Login (with Guest Access) | Dashboard Overview |
+|---|---|
+| ![Login screen with guest access option](screenshots/Screenshot_login.png) | ![Hero header, sidebar controls, and upload card](screenshots/Screenshot_header.png) |
+
+| Key Performance Indicators | Scenario Projection |
+|---|---|
+| ![KPI cards for burn multiple, monthly revenue, gross margin, break-even](screenshots/Screenshot_kpi.png) | ![24-month scenario projection chart with sliders](screenshots/Screenshot_scenario_projection.png) |
+
+| Sensitivity & Probabilistic Analysis | Budget vs. Actual Tracking |
+|---|---|
+| ![Sensitivity tornado chart and Monte Carlo probability band](screenshots/Screenshot_sensitivity_analysis.png) | ![Budget vs actual tracking chart per category](screenshots/Screenshot_budget.png) |
+
 ## Why this is a B2B SaaS product
 
 **B2B** — this isn't a consumer app. The people who use it care about headcount costs, burn multiples, and runway depletion dates: startup founders, finance teams, and operators who need to answer "how much runway do we have, and what happens if we hire five more engineers?"

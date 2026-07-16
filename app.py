@@ -479,8 +479,8 @@ else:
 
     st.caption(
         f"Baseline computed from the {len(monthly_aggregates)} most recent month(s) "
-        f"with data: avg monthly revenue ${avg_monthly_revenue:,.2f}, "
-        f"avg monthly expenses ${avg_monthly_expenses:,.2f}."
+        f"with data: avg monthly revenue \\${avg_monthly_revenue:,.2f}, "
+        f"avg monthly expenses \\${avg_monthly_expenses:,.2f}."
     )
 
     projection_df = project_cash_flow(
