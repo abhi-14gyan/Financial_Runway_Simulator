@@ -2,7 +2,7 @@
 
 **A B2B SaaS financial analytics platform for startup finance teams and founders — real-time cash runway forecasting, scenario modeling, and AI-powered executive reporting, delivered entirely in the browser.**
 
-**🔗 Live demo: [financialrunwaysimulator-emofmhlh5cdmodoe3j5kut.streamlit.app](https://financialrunwaysimulator-emofmhlh5cdmodoe3j5kut.streamlit.app)** — click **Continue as Guest**, no account required.
+**🔗 Live demo: [financialrunwaysimulator-agihjfzscdkkddmuwr85bc.streamlit.app](https://financialrunwaysimulator-agihjfzscdkkddmuwr85bc.streamlit.app)** — click **Continue as Guest**, no account required.
 
 ## Screenshots
 
