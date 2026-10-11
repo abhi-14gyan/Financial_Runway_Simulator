@@ -158,8 +158,16 @@ with st.sidebar.container(border=True):
 with st.sidebar.container(border=True):
     st.markdown("**Salary**")
     avg_monthly_salary = st.number_input(
-        "Average Monthly Salary per Hire", value=10_000.0, step=500.0, format="%.2f"
+        "Average Monthly Salary per Hire (USD)",
+        value=10_000.0,
+        step=500.0,
+        format="%.2f",
+        help="Entered in USD, like all scenario inputs. Applied as a flat monthly cost "
+        "for each new hire (multiplied by Number of New Hires).",
     )
+    if display_currency != "USD" and fx_rate is not None:
+        symbol = CURRENCY_SYMBOLS.get(display_currency, "")
+        st.caption(f"≈ {symbol}{avg_monthly_salary * fx_rate:,.2f} {display_currency} per hire / month")
 
 new_headcount_cost = num_new_hires * avg_monthly_salary
 
